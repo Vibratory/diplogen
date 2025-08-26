@@ -4,6 +4,8 @@ import { Playfair_Display, Source_Sans_3 } from "next/font/google"
 import Script from "next/script"
 import "./globals.css"
 import ClientLayout from "./ClientLayout"
+import { ClerkProvider } from "@clerk/nextjs"
+
 
 const playfairDisplay = Playfair_Display({
   subsets: ["latin"],
@@ -21,7 +23,7 @@ export const metadata: Metadata = {
   title: "Free Diploma Generator - Create Professional Diplomas Online",
   description:
     "Generate professional diplomas and certificates for free. Upload templates, customize designs, and create bulk diplomas with our easy-to-use online tool.",
-  generator: "v0.app",
+  //generator: "v0.app",
   keywords: "diploma generator, certificate maker, free diploma, online diploma, custom certificates",
 }
 
@@ -31,6 +33,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
+        <ClerkProvider>
+
     <html lang="en" className={`${playfairDisplay.variable} ${sourceSans.variable} antialiased`}>
       <head>
         <Script
@@ -44,5 +48,7 @@ export default function RootLayout({
         <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
+        </ClerkProvider>
+
   )
 }

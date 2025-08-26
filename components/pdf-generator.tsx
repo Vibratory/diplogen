@@ -28,10 +28,11 @@ interface DiplomaField {
 interface PDFGeneratorProps {
   template: string
   fields: DiplomaField[]
-  bulkData?: { headers: string[]; records: any[] }
+  bulkData?: { headers: string[]; records: any[] } | null
   singleData?: Record<string, string>
   canvasDimensions: { width: number; height: number }
 }
+
 
 export function PDFGenerator({ template, fields, bulkData, singleData, canvasDimensions }: PDFGeneratorProps) {
   const [generating, setGenerating] = useState(false)

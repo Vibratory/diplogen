@@ -9,6 +9,9 @@ import { Search, Upload, Filter, Star, Download } from "lucide-react"
 import Image from "next/image"
 import { AdBanner } from "@/components/ad-banner"
 import { useTranslation } from "@/hooks/use-translation"
+import Link from 'next/link';
+
+import { useUser, SignInButton, SignOutButton } from '@clerk/nextjs';
 
 const templates = [
   {
@@ -75,7 +78,7 @@ const templates = [
 
 export default function TemplatesPage() {
   const { t } = useTranslation()
-
+  const { isSignedIn, user } = useUser()
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -83,13 +86,18 @@ export default function TemplatesPage() {
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-bold font-serif text-foreground mb-4">{t("templatesTitle")}</h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">{t("templatesSubtitle")}</p>
+          
+          {isSignedIn ? (
+            <Link href="/templates/upload">
+              <Button size="lg" className="mb-8">
+                <Upload className="h-5 w-5 mr-2" />
+                {t("uploadTemplate")}
+              </Button>
+            </Link>
+          ) : null}
 
-          {/* Upload Template Button */}
-          <Button size="lg" className="mb-8">
-            <Upload className="h-5 w-5 mr-2" />
-            {t("uploadTemplate")}
-          </Button>
         </div>
+
 
         <div className="mb-8 flex justify-center">
           <AdBanner slot="2468135790" format="horizontal" className="max-w-2xl" />
@@ -171,7 +179,7 @@ export default function TemplatesPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </div >
   )
 }
 

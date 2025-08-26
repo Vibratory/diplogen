@@ -76,11 +76,11 @@ export async function POST(request: NextRequest) {
         try {
           if (template.startsWith("data:image/")) {
             // Handle base64 data URLs from uploaded templates
-            console.log("[v0] Loading base64 template image")
+            console.log(" Loading base64 template image")
             doc.addImage(template, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST")
           } else if (template.startsWith("http") || template.startsWith("/")) {
             // Handle regular URLs and paths
-            console.log("[v0] Loading template from URL:", template)
+            console.log(" Loading template from URL:", template)
 
             // For local paths, we need to load them differently
             if (template.startsWith("/")) {
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
             }
           } else {
             // Fallback to styled backgrounds for template names
-            console.log("[v0] Using styled background for template:", template)
+            console.log(" Using styled background for template:", template)
             if (template.includes("classic")) {
               doc.setFillColor(248, 249, 250)
               doc.rect(0, 0, pdfWidth, pdfHeight, "F")
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
             }
           }
         } catch (error) {
-          console.warn("[v0] Could not load template background:", error)
+          console.warn(" Could not load template background:", error)
           // Fallback to white background with border
           doc.setFillColor(255, 255, 255)
           doc.rect(0, 0, pdfWidth, pdfHeight, "F")
@@ -176,7 +176,7 @@ export async function POST(request: NextRequest) {
                 key.toLowerCase().replace(/[^a-z0-9]/g, "") === field.title.toLowerCase().replace(/[^a-z0-9]/g, ""),
             )
             content = fieldKey ? String(recordData[fieldKey]) : field.content
-            console.log(`[v0] Field "${field.title}" mapped to "${fieldKey}" with value: "${content}"`)
+            console.log(` Field "${field.title}" mapped to "${fieldKey}" with value: "${content}"`)
           }
 
           // Add text with proper positioning
@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
             try {
               doc.addImage(field.content, "JPEG", x, y, width, height, undefined, "FAST")
             } catch (error) {
-              console.warn("[v0] Could not load image:", error)
+              console.warn(" Could not load image:", error)
               // Fallback to placeholder
               doc.setDrawColor(200, 200, 200)
               doc.setFillColor(240, 240, 240)

@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Globe, Menu, X } from "lucide-react"
 import { useTranslation } from "@/hooks/use-translation"
 import type { Language } from "@/lib/translations"
+import { useUser, SignInButton, SignOutButton, SignedOut } from '@clerk/nextjs';
+
 
 const languages = [
   { code: "en" as Language, name: "English", flag: "🇺🇸" },
@@ -25,6 +27,7 @@ const languages = [
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const { language, t, setLanguage } = useTranslation()
+  const { isSignedIn } = useUser();
 
   return (
     <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border">
@@ -35,11 +38,11 @@ export function Navbar() {
             <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">D</span>
             </div>
-            <span className="font-playfair text-xl font-bold text-foreground">DiplomaGen</span>
+            <span className="font-playfair text-xl font-bold text-foreground">DiploMaker</span>
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
+          <div className="hidden md:flex items-center space-x-16 ml-31">
             <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">
               {t("home")}
             </Link>
@@ -79,7 +82,35 @@ export function Navbar() {
             <Button variant="ghost" size="sm" className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)}>
               {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
+
+            {!isSignedIn ?
+              <div className="
+                    px-3 py-1 
+                      border-2 border-green-500 
+                     text-green-500 
+                    rounded-lg 
+                   hover:bg-green-500 hover:text-white 
+                     transition-colors duration-300
+                      focus:outline-none focus:ring-2 focus:ring-green-300
+                        ">
+                <SignInButton />
+              </div>
+              :
+              <div className="
+                    px-3 py-1 
+                    border-2 border-red-500 
+                  text-red-500 
+                    rounded-lg 
+                  hover:bg-red-500 hover:text-white 
+                    transition-colors duration-300
+                     focus:outline-none focus:ring-2 focus:ring-red-300
+                    ">
+                <SignOutButton />
+              </div>
+            }
+
           </div>
+
         </div>
 
         {/* Mobile Navigation */}

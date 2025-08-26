@@ -15,8 +15,8 @@ import { PDFGenerator } from "./pdf-generator"
 interface DiplomaField {
   id: string
   type: "text" | "image" | "signature"
+  title: string
   content: string
-  title: string // Added title property for CSV headers
   x: number
   y: number
   width: number
@@ -24,7 +24,7 @@ interface DiplomaField {
   fontSize: number
   fontFamily: string
   color: string
-  fontWeight?: string
+  fontWeight: string
 }
 
 interface DiplomaEditorProps {
@@ -62,6 +62,11 @@ const translations = {
     addText: "Add Text Field",
     addImage: "Add Logo/Image",
     editField: "Field Properties",
+    // Inside each language object, add:
+    records: "Records",       // or "Registros" in ES, "Enregistrements" in FR, etc.
+    loaded: "loaded",         // "cargados", "chargés", etc.
+    with: "with",             // "con", "avec", etc.
+
   },
   es: {
     diplomaEditor: "Editor de Diplomas",
@@ -81,6 +86,9 @@ const translations = {
     fontFamily: "Familia de Fuente",
     fontWeight: "Peso de Fuente",
     fields: "Campos",
+    records: "Registros",
+    loaded: "cargados",
+    with: "con",
     dataFormat: "Ejemplo de Formato de Datos",
     downloadExample: "Descargar un archivo de ejemplo con el formato correcto",
     downloadExampleCSV: "Descargar Ejemplo CSV",
@@ -112,6 +120,10 @@ const translations = {
     fontFamily: "عائلة الخط",
     fontWeight: "وزن الخط",
     fields: "الحقول",
+    records: "سجلات",
+    loaded: "تم تحميلها",
+    with: "مع",
+
     dataFormat: "مثال تنسيق البيانات",
     downloadExample: "تحميل ملف مثال بالتنسيق الصحيح",
     downloadExampleCSV: "تحميل مثال CSV",
@@ -143,6 +155,10 @@ const translations = {
     fontFamily: "Famille de Police",
     fontWeight: "Poids de Police",
     fields: "Champs",
+    records: "Enregistrements",
+    loaded: "chargés",
+    with: "avec",
+
     dataFormat: "Exemple de Format de Données",
     downloadExample: "Télécharger un fichier d'exemple avec le bon format",
     downloadExampleCSV: "Télécharger Exemple CSV",
@@ -174,6 +190,10 @@ const translations = {
     fontFamily: "字体系列",
     fontWeight: "字体粗细",
     fields: "字段",
+    records: "记录",
+    loaded: "已加载",
+    with: "带有",
+
     dataFormat: "数据格式示例",
     downloadExample: "下载正确格式的示例文件",
     downloadExampleCSV: "下载示例CSV",
@@ -205,6 +225,10 @@ const translations = {
     fontFamily: "Семейство Шрифтов",
     fontWeight: "Толщина Шрифта",
     fields: "Поля",
+    records: "Записи",
+    loaded: "загружено",
+    with: "с",
+
     dataFormat: "Пример Формата Данных",
     downloadExample: "Скачать пример файла с правильным форматом",
     downloadExampleCSV: "Скачать Пример CSV",
@@ -236,6 +260,10 @@ const translations = {
     fontFamily: "फ़ॉन्ट परिवार",
     fontWeight: "फ़ॉन्ट वजन",
     fields: "फ़ील्ड",
+    records: "रिकॉर्ड",
+    loaded: "लोड किए गए",
+    with: "के साथ",
+
     dataFormat: "डेटा प्रारूप उदाहरण",
     downloadExample: "सही प्रारूप के साथ उदाहरण फ़ाइल डाउनलोड करें",
     downloadExampleCSV: "उदाहरण CSV डाउनलोड करें",
@@ -267,6 +295,10 @@ const translations = {
     fontFamily: "Família da Fonte",
     fontWeight: "Peso da Fonte",
     fields: "Campos",
+    records: "Registros",
+    loaded: "carregados",
+    with: "com",
+
     dataFormat: "Exemplo de Formato de Dados",
     downloadExample: "Baixar um arquivo de exemplo com o formato correto",
     downloadExampleCSV: "Baixar Exemplo CSV",
@@ -298,6 +330,10 @@ const translations = {
     fontFamily: "Schriftfamilie",
     fontWeight: "Schriftstärke",
     fields: "Felder",
+    records: "Einträge",
+    loaded: "geladen",
+    with: "mit",
+
     dataFormat: "Datenformat-Beispiel",
     downloadExample: "Beispieldatei mit dem richtigen Format herunterladen",
     downloadExampleCSV: "Beispiel CSV Herunterladen",
@@ -329,6 +365,10 @@ const translations = {
     fontFamily: "Keluarga Font",
     fontWeight: "Ketebalan Font",
     fields: "Field",
+    records: "rekaman",
+    loaded: "dimuat",
+    with: "dengan",
+
     dataFormat: "Contoh Format Data",
     downloadExample: "Unduh file contoh dengan format yang benar",
     downloadExampleCSV: "Unduh Contoh CSV",
@@ -360,6 +400,10 @@ const translations = {
     fontFamily: "Font Ailesi",
     fontWeight: "Font Kalınlığı",
     fields: "Alanlar",
+    records: "kayıt",
+    loaded: "yüklendi",
+    with: "ile",
+
     dataFormat: "Veri Formatı Örneği",
     downloadExample: "Doğru formatta örnek dosya indir",
     downloadExampleCSV: "Örnek CSV İndir",
@@ -487,8 +531,8 @@ const DiplomaEditor = ({ language = "en" }: DiplomaEditorProps) => {
       const newTemplate = file.url
       setAvailableTemplates((prev) => [...prev, newTemplate])
       setSelectedTemplate(newTemplate)
-      console.log("[v0] Template uploaded and selected:", newTemplate)
-      console.log("[v0] Available templates:", [...availableTemplates, newTemplate])
+      console.log(" Template uploaded and selected:", newTemplate)
+      console.log(" Available templates:", [...availableTemplates, newTemplate])
     }
   }
 
@@ -683,11 +727,10 @@ const DiplomaEditor = ({ language = "en" }: DiplomaEditorProps) => {
                   {fields.map((field) => (
                     <div
                       key={field.id}
-                      className={`p-2 border rounded-lg cursor-pointer transition-colors ${
-                        selectedField === field.id
+                      className={`p-2 border rounded-lg cursor-pointer transition-colors ${selectedField === field.id
                           ? "border-primary bg-primary/5"
                           : "border-border hover:border-primary/50"
-                      }`}
+                        }`}
                       onClick={() => setSelectedField(field.id)}
                     >
                       <div className="flex items-center justify-between">
@@ -848,11 +891,10 @@ const DiplomaEditor = ({ language = "en" }: DiplomaEditorProps) => {
                 {fields.map((field) => (
                   <div
                     key={field.id}
-                    className={`absolute transition-all group ${
-                      selectedField === field.id
+                    className={`absolute transition-all group ${selectedField === field.id
                         ? "border-2 border-primary border-dashed"
                         : "border-2 border-transparent hover:border-primary/50"
-                    } ${isDragging && selectedField === field.id ? "cursor-grabbing" : "cursor-grab"}`}
+                      } ${isDragging && selectedField === field.id ? "cursor-grabbing" : "cursor-grab"}`}
                     style={{
                       left: `${(field.x / 100) * Math.min(canvasDimensions.width, 800)}px`,
                       top: `${(field.y / 100) * Math.min(canvasDimensions.height, 600)}px`,
@@ -940,9 +982,8 @@ const DiplomaEditor = ({ language = "en" }: DiplomaEditorProps) => {
                     {availableTemplates.map((template, index) => (
                       <div
                         key={index}
-                        className={`relative cursor-pointer border-2 rounded-lg overflow-hidden transition-colors ${
-                          selectedTemplate === template ? "border-primary" : "border-border hover:border-primary/50"
-                        }`}
+                        className={`relative cursor-pointer border-2 rounded-lg overflow-hidden transition-colors ${selectedTemplate === template ? "border-primary" : "border-border hover:border-primary/50"
+                          }`}
                         onClick={() => setSelectedTemplate(template)}
                       >
                         <img
