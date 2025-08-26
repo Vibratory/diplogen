@@ -265,7 +265,7 @@ export function AdminDashboard() {
                   <CheckCircle className="h-5 w-5 text-green-500" />
                   <div className="flex-1">
                     <p className="text-sm font-medium">New template approved</p>
-                    <p className="text-xs text-muted-foreground">Modern Certificate by jane.doe@email.com</p>
+                    <p className="text-xs text-muted-foreground">Modern Certificate by dill.doe@email.com</p>
                   </div>
                   <Badge variant="outline">2 hours ago</Badge>
                 </div>
