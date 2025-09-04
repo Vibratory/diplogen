@@ -231,11 +231,10 @@ function TemplateCard({ template }: { template: (typeof templates)[0] }) {
         </div>
 
         <div className="flex gap-2">
-          <Button className="flex-1" size="sm">
-            {t("useTemplate")}
-          </Button>
-          <Button variant="outline" size="sm">
-            {t("preview")}
+          <Button className="flex-1" size="sm" asChild>
+            <Link href={`/editor?template=${encodeURIComponent(template.image)}`}>
+              {t("useTemplate")}
+            </Link>
           </Button>
         </div>
       </CardContent>

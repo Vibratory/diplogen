@@ -57,6 +57,59 @@ export function TemplateUpload() {
     return <File className="h-8 w-8 text-gray-500" />
   }
 
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+
+  const submit = async () => {
+    setError(null)
+    setSuccess(null)
+    if (uploadedFiles.length === 0) return
+    if (!templateName || !templateCategory) {
+      setError("Please provide a template name and category")
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      // For simplicity, only take the first file's preview as the image URL
+      const first = uploadedFiles[0]
+      let imageUrl = first.preview
+      if (!imageUrl) {
+        // If no preview (non-image), we could upload to storage; for now, block
+        setError("Please upload an image file (PNG/JPG/SVG)")
+        setSubmitting(false)
+        return
+      }
+      const res = await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: templateName,
+          description: templateDescription,
+          category: templateCategory,
+          image: imageUrl,
+          source: 'templatesPage',
+          requireApproval: true,
+          autoApprove: false
+        })
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to upload')
+      }
+      setSuccess('Template uploaded. Awaiting admin approval.')
+      setUploadedFiles([])
+      setTemplateName('')
+      setTemplateDescription('')
+      setTemplateCategory('')
+    } catch (e: any) {
+      setError(e?.message || 'Upload failed')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <Card>
@@ -152,11 +205,14 @@ export function TemplateUpload() {
             </div>
           </div>
 
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          {success && <p className="text-sm text-green-600">{success}</p>}
+
           <div className="flex gap-3">
-            <Button className="flex-1" disabled={uploadedFiles.length === 0}>
-              Upload Template
+            <Button className="flex-1" disabled={uploadedFiles.length === 0 || submitting} onClick={submit}>
+              {submitting ? 'Uploading...' : 'Upload Template'}
             </Button>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="outline" disabled={submitting} onClick={() => { setUploadedFiles([]); setTemplateName(''); setTemplateDescription(''); setTemplateCategory(''); setError(null); setSuccess(null); }}>Cancel</Button>
           </div>
         </CardContent>
       </Card>

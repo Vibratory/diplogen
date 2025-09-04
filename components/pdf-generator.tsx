@@ -23,6 +23,14 @@ interface DiplomaField {
   fontFamily: string
   color: string
   fontWeight: string
+  textAlign: "left" | "center" | "right"
+  fontStyle?: "normal" | "italic"
+  textDecoration?: "none" | "underline"
+  letterSpacing?: number
+  lineHeight?: number
+  textTransform?: "none" | "uppercase" | "capitalize"
+  rotation?: number
+  opacity?: number
 }
 
 interface PDFGeneratorProps {
@@ -31,15 +39,47 @@ interface PDFGeneratorProps {
   bulkData?: { headers: string[]; records: any[] } | null
   singleData?: Record<string, string>
   canvasDimensions: { width: number; height: number }
+  displayDimensions?: { width: number; height: number }
+  dpi?: number
 }
 
 
-export function PDFGenerator({ template, fields, bulkData, singleData, canvasDimensions }: PDFGeneratorProps) {
+export function PDFGenerator({ template, fields, bulkData, singleData, canvasDimensions, displayDimensions, dpi }: PDFGeneratorProps) {
   const [generating, setGenerating] = useState(false)
   const [progress, setProgress] = useState(0)
   const [generatedPDFs, setGeneratedPDFs] = useState<any[]>([])
   const [error, setError] = useState<string | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  // Convert a URL/Blob into a data URL to ensure server can embed it
+  const toDataUrl = async (src: string): Promise<string> => {
+    try {
+      if (!src) return src
+      if (src.startsWith('data:image/')) return src
+      const res = await fetch(src)
+      const blob = await res.blob()
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(String(reader.result))
+        reader.onerror = reject
+        reader.readAsDataURL(blob)
+      })
+    } catch {
+      return src
+    }
+  }
+
+  const resolveImagesInFields = async (arr: DiplomaField[]): Promise<DiplomaField[]> => {
+    const out: DiplomaField[] = []
+    for (const f of arr) {
+      if (f.type === 'image' && typeof f.content === 'string' && f.content && !f.content.startsWith('data:image/')) {
+        out.push({ ...f, content: await toDataUrl(f.content) })
+      } else {
+        out.push(f)
+      }
+    }
+    return out
+  }
 
   const generateSinglePDF = async () => {
     setGenerating(true)
@@ -51,17 +91,38 @@ export function PDFGenerator({ template, fields, bulkData, singleData, canvasDim
         setProgress((prev) => Math.min(prev + 20, 90))
       }, 200)
 
+      // Don't transform text visually in the editor; send raw data.
+      const enrichedFields = fields.map((f: any) =>
+        f.type === "text"
+          ? {
+              ...f,
+              fontStyle: f.fontStyle || "normal",
+              textDecoration: f.textDecoration || "none",
+              letterSpacing: f.letterSpacing ?? 0,
+              lineHeight: f.lineHeight ?? 1.2,
+              textTransform: f.textTransform || "none",
+              rotation: f.rotation ?? 0,
+              opacity: f.opacity ?? 1,
+            }
+          : f,
+      )
+
+      const resolvedTemplate = await toDataUrl(template)
+      const resolvedFields = await resolveImagesInFields(enrichedFields as any)
+
       const response = await fetch("/api/generate-pdf", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          template,
-          fields,
+          template: resolvedTemplate,
+          fields: resolvedFields,
           data: singleData,
           format: "single",
           canvasDimensions,
+          displayDimensions,
+          dpi,
           includeTemplate: true,
         }),
       })
@@ -101,18 +162,39 @@ export function PDFGenerator({ template, fields, bulkData, singleData, canvasDim
         setProgress((prev) => Math.min(prev + 10, 90))
       }, 300)
 
+      // Do not transform bulk data; server will apply textTransform during rendering.
+      const enrichedFields = fields.map((f: any) =>
+        f.type === "text"
+          ? {
+              ...f,
+              fontStyle: f.fontStyle || "normal",
+              textDecoration: f.textDecoration || "none",
+              letterSpacing: f.letterSpacing ?? 0,
+              lineHeight: f.lineHeight ?? 1.2,
+              textTransform: f.textTransform || "none",
+              rotation: f.rotation ?? 0,
+              opacity: f.opacity ?? 1,
+            }
+          : f,
+      )
+
+      const resolvedTemplate = await toDataUrl(template)
+      const resolvedFields = await resolveImagesInFields(enrichedFields as any)
+
       const response = await fetch("/api/generate-pdf", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          template,
-          fields,
+          template: resolvedTemplate,
+          fields: resolvedFields,
           format: "bulk",
           bulkData: bulkData.records,
           headers: bulkData.headers,
           canvasDimensions,
+          displayDimensions,
+          dpi,
           includeTemplate: true,
         }),
       })

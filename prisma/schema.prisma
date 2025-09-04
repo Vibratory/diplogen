@@ -1,0 +1,115 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Template {
+  id                String   @id @default(cuid())
+  uploader          String?  // Clerk user ID
+  name              String
+  description       String?
+  category          String   @default("other")
+  image             String   // URL to the template image
+  approved          Boolean  @default(false)
+  approvedBy        String?  // Admin user ID who approved
+  approvedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  uses              Int      @default(0)
+  generatedDiplomas Int      @default(0)
+
+  // Relations
+  uploaderUser       User?    @relation("UploaderTemplates", fields: [uploader], references: [id])
+  generationSessions GenerationSession[]
+  userTemplatesUsed  UserTemplateUsed[]
+
+  @@map("templates")
+}
+
+model User {
+  id                String   @id // Clerk user ID
+  email             String   @unique
+  signedUpAt        DateTime @default(now())
+  languagePreference String  @default("en")
+  diplomasCreated   Int      @default(0)
+  templatesUploaded Int      @default(0)
+  lastActive        DateTime @default(now())
+
+  // Relations
+  generationSessions GenerationSession[]
+  templatesUsed      UserTemplateUsed[]
+  uploadedTemplates  Template[] @relation("UploaderTemplates")
+
+  @@map("users")
+}
+
+model UserTemplateUsed {
+  id         String   @id @default(cuid())
+  userId     String
+  templateId String
+  usedAt     DateTime @default(now())
+
+  // Relations
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, templateId])
+  @@map("user_templates_used")
+}
+
+model GenerationSession {
+  id         String   @id @default(cuid())
+  userId     String
+  templateId String
+  count      Int      @default(1)
+  createdAt  DateTime @default(now())
+
+  // Relations
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@map("generation_sessions")
+}
+
+model Admin {
+  id                    String   @id // Clerk user ID
+  name                  String
+  email                 String   @unique
+  uploadedTemplates     Int      @default(0)
+  approvedTemplates     Int      @default(0)
+  createdAt             DateTime @default(now())
+
+  @@map("admins")
+}
+
+model Visitor {
+  id        String   @id @default(cuid())
+  sessionId String   @unique
+  lastSeen  DateTime @default(now())
+  userAgent String?
+  ipAddress String?
+
+  @@map("visitors")
+}
+
+model Statistics {
+  id                    String   @id @default("global")
+  totalDiplomas         Int      @default(0)
+  totalUsers            Int      @default(0)
+  totalTemplates        Int      @default(0)
+  approvedTemplates     Int      @default(0)
+  pendingTemplates      Int      @default(0)
+  activeUsers           Int      @default(0)
+  monthlyGrowth         Float    @default(0)
+  conversionRate        Float    @default(0)
+  updatedAt             DateTime @updatedAt
+
+  @@map("statistics")
+}

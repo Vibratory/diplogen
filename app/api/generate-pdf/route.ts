@@ -14,6 +14,14 @@ interface DiplomaField {
   fontFamily: string
   color: string
   fontWeight: string
+  textAlign: "left" | "center" | "right"
+  fontStyle?: "normal" | "italic"
+  textDecoration?: "none" | "underline"
+  letterSpacing?: number
+  lineHeight?: number
+  textTransform?: "none" | "uppercase" | "capitalize"
+  rotation?: number
+  opacity?: number
 }
 
 interface GeneratePDFRequest {
@@ -24,6 +32,8 @@ interface GeneratePDFRequest {
   bulkData?: Record<string, string>[]
   headers?: string[]
   canvasDimensions?: { width: number; height: number }
+  displayDimensions?: { width: number; height: number }
+  dpi?: number
   includeTemplate?: boolean
 }
 
@@ -37,6 +47,8 @@ export async function POST(request: NextRequest) {
       bulkData,
       headers,
       canvasDimensions = { width: 800, height: 600 },
+      displayDimensions,
+      dpi = 300,
       includeTemplate = true,
     }: GeneratePDFRequest = await request.json()
 
@@ -54,8 +66,14 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < dataToProcess.length; i++) {
       const recordData = dataToProcess[i]
 
-      const pdfWidth = canvasDimensions.width * 0.264583 // Convert px to mm
-      const pdfHeight = canvasDimensions.height * 0.264583 // Convert px to mm
+      // Convert px -> mm using provided DPI (mm per px = 25.4 / DPI). Default DPI=300 for print-accurate size.
+      const MM_PER_PX = 25.4 / dpi
+      const pdfWidth = canvasDimensions.width * MM_PER_PX // Convert px to mm
+      const pdfHeight = canvasDimensions.height * MM_PER_PX // Convert px to mm
+
+      // All field sizes/positions are stored relative to the full canvas in px
+      // Convert px -> mm directly using DPI; no display scaling needed here
+      const pxToMm = MM_PER_PX
 
       // Create new PDF document with proper dimensions
       const doc = new jsPDF({
@@ -74,66 +92,30 @@ export async function POST(request: NextRequest) {
 
       if (includeTemplate && template) {
         try {
-          if (template.startsWith("data:image/")) {
-            // Handle base64 data URLs from uploaded templates
-            console.log(" Loading base64 template image")
-            doc.addImage(template, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST")
-          } else if (template.startsWith("http") || template.startsWith("/")) {
-            // Handle regular URLs and paths
-            console.log(" Loading template from URL:", template)
-
-            // For local paths, we need to load them differently
-            if (template.startsWith("/")) {
-              // Create a canvas to load and convert the image
-              const img = new Image()
-              img.crossOrigin = "anonymous"
-
-              await new Promise((resolve, reject) => {
-                img.onload = () => {
-                  const canvas = document.createElement("canvas")
-                  const ctx = canvas.getContext("2d")
-                  canvas.width = img.width
-                  canvas.height = img.height
-                  ctx?.drawImage(img, 0, 0)
-                  const dataURL = canvas.toDataURL("image/jpeg", 0.8)
-                  doc.addImage(dataURL, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST")
-                  resolve(true)
-                }
-                img.onerror = reject
-                img.src = template
-              })
-            } else {
-              // Direct URL loading
-              doc.addImage(template, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST")
+          // Helper to resolve any URL/path to a data URL suitable for addImage
+          const resolveToDataUrl = async (src: string): Promise<{ dataUrl: string; format: "PNG" | "JPEG" }> => {
+            if (src.startsWith("data:image/")) {
+              const isPng = src.toLowerCase().startsWith("data:image/png")
+              return { dataUrl: src, format: isPng ? "PNG" : "JPEG" }
             }
-          } else {
-            // Fallback to styled backgrounds for template names
-            console.log(" Using styled background for template:", template)
-            if (template.includes("classic")) {
-              doc.setFillColor(248, 249, 250)
-              doc.rect(0, 0, pdfWidth, pdfHeight, "F")
-              // Add decorative border
-              doc.setDrawColor(139, 69, 19)
-              doc.setLineWidth(2)
-              doc.rect(5, 5, pdfWidth - 10, pdfHeight - 10)
-              doc.setLineWidth(1)
-              doc.rect(8, 8, pdfWidth - 16, pdfHeight - 16)
-            } else if (template.includes("modern")) {
-              doc.setFillColor(255, 255, 255)
-              doc.rect(0, 0, pdfWidth, pdfHeight, "F")
-              // Add modern border
-              doc.setDrawColor(34, 197, 94)
-              doc.setLineWidth(3)
-              doc.rect(3, 3, pdfWidth - 6, pdfHeight - 6)
-            } else {
-              // Default elegant style
-              doc.setFillColor(254, 254, 254)
-              doc.rect(0, 0, pdfWidth, pdfHeight, "F")
-              doc.setDrawColor(0, 0, 0)
-              doc.setLineWidth(1.5)
-              doc.rect(4, 4, pdfWidth - 8, pdfHeight - 8)
+            let url = src
+            if (src.startsWith("/")) {
+              // Build absolute URL for local public assets
+              const origin = request.nextUrl.origin
+              url = new URL(src, origin).toString()
             }
+            const res = await fetch(url)
+            if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`)
+            const buf = Buffer.from(await res.arrayBuffer())
+            const contentType = res.headers.get("content-type") || "image/png"
+            const base64 = buf.toString("base64")
+            const dataUrl = `data:${contentType};base64,${base64}`
+            const isPng = contentType.toLowerCase().includes("png")
+            return { dataUrl, format: isPng ? "PNG" : "JPEG" }
           }
+
+          const { dataUrl, format } = await resolveToDataUrl(template)
+          doc.addImage(dataUrl, format, 0, 0, pdfWidth, pdfHeight, undefined, "FAST")
         } catch (error) {
           console.warn(" Could not load template background:", error)
           // Fallback to white background with border
@@ -148,74 +130,186 @@ export async function POST(request: NextRequest) {
       // Process each field
       for (const field of fields) {
         if (field.type === "text") {
-          const x = (field.x / 100) * pdfWidth
-          const y = (field.y / 100) * pdfHeight
-
-          // Set font properties
-          const fontFamily =
-            field.fontFamily === "serif" ? "times" : field.fontFamily === "mono" ? "courier" : "helvetica"
-          const fontStyle = field.fontWeight === "bold" ? "bold" : "normal"
-
-          doc.setFont(fontFamily, fontStyle)
-          doc.setFontSize(field.fontSize * 0.75) // Scale font size for PDF
-
-          // Set text color
-          const color = field.color || "#000000"
-          const r = Number.parseInt(color.slice(1, 3), 16)
-          const g = Number.parseInt(color.slice(3, 5), 16)
-          const b = Number.parseInt(color.slice(5, 7), 16)
-          doc.setTextColor(r, g, b)
-
+          // Resolve actual content from recordData by matching the field title
           let content = field.content
           if (recordData && field.title) {
-            const fieldKey = Object.keys(recordData).find(
-              (key) =>
-                key.toLowerCase() === field.title.toLowerCase() ||
-                key.toLowerCase().includes(field.title.toLowerCase()) ||
-                field.title.toLowerCase().includes(key.toLowerCase()) ||
-                key.toLowerCase().replace(/[^a-z0-9]/g, "") === field.title.toLowerCase().replace(/[^a-z0-9]/g, ""),
+            const fieldKey = Object.keys(recordData).find((key) =>
+              key.toLowerCase() === field.title.toLowerCase() ||
+              key.toLowerCase().includes(field.title.toLowerCase()) ||
+              field.title.toLowerCase().includes(key.toLowerCase()) ||
+              key.toLowerCase().replace(/[^a-z0-9]/g, "") === field.title.toLowerCase().replace(/[^a-z0-9]/g, ""),
             )
-            content = fieldKey ? String(recordData[fieldKey]) : field.content
-            console.log(` Field "${field.title}" mapped to "${fieldKey}" with value: "${content}"`)
+            if (fieldKey) content = String((recordData as any)[fieldKey])
           }
 
-          // Add text with proper positioning
-          doc.text(content, x, y + field.fontSize * 0.75 * 0.3)
-        }
+          // Always draw text content in the PDF preview/generation.
+          // Previously we skipped when content matched the field's placeholder and includeTemplate was true,
+          // which caused PDFs with only the background and no text. We now always render the text box contents.
+          // no-op
 
-        // Handle image and signature fields
-        if (field.type === "image" || field.type === "signature") {
-          const x = (field.x / 100) * pdfWidth
-          const y = (field.y / 100) * pdfHeight
-          const width = (field.width / 100) * pdfWidth
-          const height = (field.height / 100) * pdfHeight
+          // Apply textTransform to content (PDF-only)
+          const tform = (field.textTransform || "none").toLowerCase()
+          if (tform === "uppercase") {
+            content = content.toUpperCase()
+          } else if (tform === "capitalize") {
+            content = content.replace(/\b\w/g, (c) => c.toUpperCase())
+          }
 
-          if (
-            field.content &&
-            (field.content.startsWith("data:image/") ||
-              field.content.startsWith("http") ||
-              field.content.startsWith("/"))
-          ) {
-            try {
-              doc.addImage(field.content, "JPEG", x, y, width, height, undefined, "FAST")
-            } catch (error) {
-              console.warn(" Could not load image:", error)
-              // Fallback to placeholder
-              doc.setDrawColor(200, 200, 200)
-              doc.setFillColor(240, 240, 240)
-              doc.rect(x, y, width, height, "FD")
-              doc.setFontSize(8)
-              doc.setTextColor(100, 100, 100)
-              doc.text(field.type === "image" ? "Image" : "Signature", x + 2, y + 10)
+          // Position and sizing
+          const leftMm = (field.x / 100) * pdfWidth
+          const topMm = (field.y / 100) * pdfHeight
+          const boxWidthMm = (field.width || 0) * pxToMm
+          const boxHeightMm = (field.height || 0) * pxToMm
+
+          // Map font family to jsPDF base families
+          const ff = (field.fontFamily || "").toLowerCase()
+          // Expanded detection lists (lowercased, substring match)
+          const serifGroup = [
+            "serif",
+            "times", "times new roman", "georgia", "garamond", "palatino", "palatino linotype", "cambria", "noto serif",
+            // Google serif families used in editor
+            "playfair display", "merriweather", "lora", "libre baskerville", "spectral", "cormorant garamond"
+          ]
+          const monoGroup = [
+            "monospace", "mono", "courier", "courier new", "lucida console",
+            // Popular monos
+            "fira code", "jetbrains mono", "inconsolata", "source code pro"
+          ]
+          const isSerif = serifGroup.some((s) => ff.includes(s))
+          const isMono = monoGroup.some((m) => ff.includes(m))
+          const fontFamily = isSerif ? "times" : isMono ? "courier" : "helvetica"
+
+          // Determine style (normal | bold | italic | bolditalic)
+          let style: "normal" | "bold" | "italic" | "bolditalic" = "normal"
+          const isBold = (field.fontWeight || "normal").toLowerCase() === "bold"
+          const isItalic = (field.fontStyle || "normal").toLowerCase() === "italic"
+          if (isBold && isItalic) style = "bolditalic"
+          else if (isBold) style = "bold"
+          else if (isItalic) style = "italic"
+
+          const fontSizePx = field.fontSize || 16
+          const fontSizePt = fontSizePx * (72 / dpi)
+          doc.setFont(fontFamily, style)
+          doc.setFontSize(fontSizePt)
+
+          // Color and opacity
+          const color = field.color || "#000000"
+          const r = parseInt(color.slice(1, 3), 16)
+          const g = parseInt(color.slice(3, 5), 16)
+          const b = parseInt(color.slice(5, 7), 16)
+          doc.setTextColor(r, g, b)
+
+          const opacity = Math.max(0, Math.min(1, field.opacity ?? 1))
+          let resetOpacity: (() => void) | null = null
+          try {
+            const GS = (doc as any).GState
+            if (GS && (doc as any).setGState) {
+              ;(doc as any).setGState(new GS({ opacity }))
+              resetOpacity = () => {
+                ;(doc as any).setGState(new GS({ opacity: 1 }))
+              }
+            } else if ((doc as any).setAlpha) {
+              ;(doc as any).setAlpha(opacity)
+              resetOpacity = () => {
+                ;(doc as any).setAlpha(1)
+              }
             }
-          } else {
-            // Add placeholder rectangle for empty images/signatures
-            doc.setDrawColor(200, 200, 200)
-            doc.setFillColor(240, 240, 240)
-            doc.rect(x, y, width, height, "FD")
-            doc.setFontSize(8)
-            doc.setTextColor(100, 100, 100)
-            doc.text(field.type === "image" ? "Logo" : "Signature", x + 2, y + 10)
+          } catch {}
+
+          // Alignment
+          const align: "left" | "center" | "right" = field.textAlign === "center" ? "center" : field.textAlign === "right" ? "right" : "left"
+
+          // Compute anchor position
+          let xMm = leftMm
+          if (align === "center") xMm = leftMm + boxWidthMm / 2
+          else if (align === "right") xMm = leftMm + boxWidthMm
+
+          const fontHeightMm = fontSizePx * MM_PER_PX
+          let yMm = topMm
+          if (boxHeightMm > 0) {
+            yMm = topMm + Math.max(0, (boxHeightMm - fontHeightMm) / 2)
+          }
+
+          // Letter spacing (px -> mm)
+          const letterSpacingMm = (field.letterSpacing ?? 0) * pxToMm
+          const angle = field.rotation ?? 0
+          const lineHeightMult = field.lineHeight ?? 1.2
+          const underline = (field.textDecoration || "none") === "underline"
+
+          // Support multiple lines (split on \n)
+          const lines = String(content).split(/\r?\n/)
+
+          const drawLineText = (line: string, baseX: number, baseY: number) => {
+            if (letterSpacingMm === 0) {
+              // Single call with angle
+              doc.text(line, baseX, baseY, { align, baseline: "top", angle })
+              if (underline) {
+                const textWidth = doc.getTextWidth(line)
+                let startX = baseX
+                if (align === "center") startX = baseX - textWidth / 2
+                else if (align === "right") startX = baseX - textWidth
+                const underlineY = baseY + fontHeightMm * 0.88
+                doc.setDrawColor(r, g, b)
+                doc.setLineWidth(0.3)
+                doc.line(startX, underlineY, startX + textWidth, underlineY)
+              }
+              return
+            }
+            // Draw character by character respecting letter spacing
+            let xCursor = baseX
+            // For alignment, compute total width first
+            const widths = Array.from(line).map((ch) => doc.getTextWidth(ch))
+            const totalWidth = widths.reduce((acc, w) => acc + w, 0) + Math.max(0, (line.length - 1) * letterSpacingMm)
+            if (align === "center") xCursor = baseX - totalWidth / 2
+            else if (align === "right") xCursor = baseX - totalWidth
+
+            for (let i = 0; i < line.length; i++) {
+              const ch = line[i]
+              doc.text(ch, xCursor, baseY, { baseline: "top", angle })
+              xCursor += widths[i] + letterSpacingMm
+            }
+            if (underline) {
+              const underlineY = baseY + fontHeightMm * 0.88
+              doc.setDrawColor(r, g, b)
+              doc.setLineWidth(0.3)
+              doc.line(xCursor - totalWidth, underlineY, xCursor, underlineY)
+            }
+          }
+
+          for (let li = 0; li < lines.length; li++) {
+            drawLineText(lines[li], xMm, yMm + li * fontHeightMm * lineHeightMult)
+          }
+
+          if (resetOpacity) resetOpacity()
+        } else if (field.type === "image" && field.content) {
+          try {
+            const resolveToDataUrl = async (src: string): Promise<{ dataUrl: string; format: "PNG" | "JPEG" }> => {
+              if (src.startsWith("data:image/")) {
+                const isPng = src.toLowerCase().startsWith("data:image/png")
+                return { dataUrl: src, format: isPng ? "PNG" : "JPEG" }
+              }
+              let url = src
+              if (src.startsWith("/")) {
+                const origin = request.nextUrl.origin
+                url = new URL(src, origin).toString()
+              }
+              const res = await fetch(url)
+              if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`)
+              const buf = Buffer.from(await res.arrayBuffer())
+              const contentType = res.headers.get("content-type") || "image/png"
+              const base64 = buf.toString("base64")
+              const dataUrl = `data:${contentType};base64,${base64}`
+              const isPng = contentType.toLowerCase().includes("png")
+              return { dataUrl, format: isPng ? "PNG" : "JPEG" }
+            }
+            const { dataUrl, format } = await resolveToDataUrl(field.content)
+            const leftMm = (field.x / 100) * pdfWidth
+            const topMm = (field.y / 100) * pdfHeight
+            const wMm = (field.width || 0) * pxToMm
+            const hMm = (field.height || 0) * pxToMm
+            doc.addImage(dataUrl, format, leftMm, topMm, wMm, hMm, undefined, "FAST")
+          } catch (e) {
+            console.warn(" Failed to add image field:", e)
           }
         }
       }
